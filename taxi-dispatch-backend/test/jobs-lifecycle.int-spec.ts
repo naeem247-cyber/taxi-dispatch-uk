@@ -7,6 +7,7 @@ import { Driver } from '../src/database/entities/driver.entity';
 import { JobStatus } from '../src/common/enums/job-status.enum';
 import { JobsGateway } from '../src/jobs/jobs.gateway';
 import { DriverStatus } from '../src/common/enums/driver-status.enum';
+import { PinoLogger } from 'nestjs-pino';
 
 describe('Jobs lifecycle integration', () => {
   let jobsService: JobsService;
@@ -60,6 +61,7 @@ describe('Jobs lifecycle integration', () => {
           builder.jobId = params.jobId;
           return builder;
         },
+        andWhere: () => builder,
         getOne: async () => jobs.find((j) => j.id === builder.jobId) ?? null,
       };
       return builder;
@@ -101,6 +103,11 @@ describe('Jobs lifecycle integration', () => {
     broadcastJobStatusChanged: jest.fn(),
   };
 
+  const loggerMock = {
+    setContext: jest.fn(),
+    info: jest.fn(),
+  };
+
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -109,6 +116,7 @@ describe('Jobs lifecycle integration', () => {
         { provide: getRepositoryToken(Driver), useValue: driversRepoMock },
         { provide: DataSource, useValue: dataSourceMock },
         { provide: JobsGateway, useValue: jobsGatewayMock },
+        { provide: PinoLogger, useValue: loggerMock },
       ],
     }).compile();
 

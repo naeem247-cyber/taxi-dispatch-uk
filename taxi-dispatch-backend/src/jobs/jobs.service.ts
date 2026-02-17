@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
+import { PinoLogger } from 'nestjs-pino';
 import { Job } from '../database/entities/job.entity';
 import { Driver } from '../database/entities/driver.entity';
 import { CreateJobDto } from './dto/create-job.dto';
@@ -29,7 +30,10 @@ export class JobsService {
     @InjectRepository(Driver) private readonly driversRepo: Repository<Driver>,
     private readonly dataSource: DataSource,
     private readonly jobsGateway: JobsGateway,
-  ) {}
+    private readonly logger: PinoLogger,
+  ) {
+    this.logger.setContext(JobsService.name);
+  }
 
   async create(dto: CreateJobDto) {
     const job = this.jobsRepo.create({
@@ -43,6 +47,7 @@ export class JobsService {
     });
 
     const saved = await this.jobsRepo.save(job);
+    this.logger.info({ job_id: saved.id, status: saved.status }, 'job created');
     this.jobsGateway.broadcastJobCreated(saved);
     return saved;
   }
@@ -56,6 +61,7 @@ export class JobsService {
         .createQueryBuilder('job')
         .setLock('pessimistic_write')
         .where('job.id = :jobId', { jobId })
+        .andWhere('job.deleted_at IS NULL')
         .getOne();
 
       if (!job) throw new NotFoundException('Job not found');
@@ -69,6 +75,7 @@ export class JobsService {
       driver.status = DriverStatus.RESERVED;
 
       const [savedJob] = await Promise.all([jobRepo.save(job), driverRepo.save(driver)]);
+      this.logger.info({ job_id: savedJob.id, driver_id: driver.id }, 'job assigned');
       this.jobsGateway.broadcastJobAssigned(savedJob, driver.id);
       return savedJob;
     });
@@ -100,6 +107,7 @@ export class JobsService {
       }
     }
 
+    this.logger.info({ job_id: saved.id, status: saved.status }, 'job status changed');
     this.jobsGateway.broadcastJobStatusChanged(saved);
     return saved;
   }

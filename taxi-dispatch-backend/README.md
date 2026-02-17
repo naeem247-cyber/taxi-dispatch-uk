@@ -36,6 +36,10 @@ Backend scaffold for a **single-base UK private hire dispatch operation**.
 - Swagger docs at `/docs`
 - `/health` endpoint
 - Optional Redis scaffold for active driver location cache
+- Correlation ID middleware (`x-correlation-id`) for request tracing
+- Soft delete support on jobs (`deleted_at`)
+- Graceful shutdown hooks enabled
+- Production Docker profile (`docker-compose.prod.yml`, production image target)
 - Basic integration tests for auth and job lifecycle
 
 ## Project Structure
@@ -88,6 +92,9 @@ API base URL:
 
 Swagger:
 - `http://localhost:3000/docs`
+
+Production compose:
+- `docker compose -f docker-compose.prod.yml up --build -d`
 
 ## Local Run (without Docker)
 

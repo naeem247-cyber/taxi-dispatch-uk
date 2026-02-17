@@ -1,10 +1,11 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import * as Joi from 'joi';
+import { randomUUID } from 'crypto';
 import { AuthModule } from './auth/auth.module';
 import { AccountsModule } from './accounts/accounts.module';
 import { DriversModule } from './drivers/drivers.module';
@@ -14,6 +15,7 @@ import { JobsModule } from './jobs/jobs.module';
 import { RecurringJobsModule } from './recurring-jobs/recurring-jobs.module';
 import { HealthModule } from './health/health.module';
 import { RedisModule } from './common/redis/redis.module';
+import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 
 @Module({
   imports: [
@@ -35,6 +37,14 @@ import { RedisModule } from './common/redis/redis.module';
     LoggerModule.forRoot({
       pinoHttp: {
         level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+        genReqId: (req) => {
+          const existing = req.headers['x-correlation-id'];
+          if (typeof existing === 'string' && existing.trim()) return existing;
+          return (req as { correlationId?: string }).correlationId ?? randomUUID();
+        },
+        customProps: (req) => ({
+          correlation_id: (req as { correlationId?: string }).correlationId,
+        }),
         transport:
           process.env.NODE_ENV === 'production'
             ? undefined
@@ -83,4 +93,8 @@ import { RedisModule } from './common/redis/redis.module';
     },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
+  }
+}

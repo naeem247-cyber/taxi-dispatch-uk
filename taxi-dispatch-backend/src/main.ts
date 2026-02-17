@@ -8,6 +8,7 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
   app.setGlobalPrefix('api/v1');
+  app.enableShutdownHooks();
   app.useLogger(app.get(Logger));
 
   app.useGlobalPipes(

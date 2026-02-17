@@ -7,6 +7,7 @@ import { Job } from '../src/database/entities/job.entity';
 import { Driver } from '../src/database/entities/driver.entity';
 import { DriverStatus } from '../src/common/enums/driver-status.enum';
 import { JobsGateway } from '../src/jobs/jobs.gateway';
+import { PinoLogger } from 'nestjs-pino';
 
 describe('Jobs assignment concurrency', () => {
   let jobsService: JobsService;
@@ -58,6 +59,7 @@ describe('Jobs assignment concurrency', () => {
           builder.jobId = params.jobId;
           return builder;
         },
+        andWhere: () => builder,
         getOne: async () => jobs.find((j) => j.id === builder.jobId) ?? null,
       };
       return builder;
@@ -104,6 +106,11 @@ describe('Jobs assignment concurrency', () => {
     broadcastJobStatusChanged: jest.fn(),
   };
 
+  const loggerMock = {
+    setContext: jest.fn(),
+    info: jest.fn(),
+  };
+
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -112,6 +119,7 @@ describe('Jobs assignment concurrency', () => {
         { provide: getRepositoryToken(Driver), useValue: driversRepoMock },
         { provide: DataSource, useValue: dataSourceMock },
         { provide: JobsGateway, useValue: jobsGatewayMock },
+        { provide: PinoLogger, useValue: loggerMock },
       ],
     }).compile();
 
