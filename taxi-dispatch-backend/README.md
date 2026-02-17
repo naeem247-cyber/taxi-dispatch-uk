@@ -29,6 +29,7 @@ Backend scaffold for a **single-base UK private hire dispatch operation**.
   - `requested -> accepted -> arrived -> on_trip -> completed`
 - Socket.io gateway namespace `/dispatch` that emits `job.updated`
 - Swagger docs at `/docs`
+- `/health` endpoint
 - Basic integration tests for auth and job lifecycle
 
 ## Project Structure
