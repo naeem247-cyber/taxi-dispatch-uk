@@ -1,6 +1,7 @@
 import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
 import { Account } from './account.entity';
 import { Vehicle } from './vehicle.entity';
+import { DriverStatus } from '../../common/enums/driver-status.enum';
 
 @Entity('drivers')
 export class Driver {
@@ -19,8 +20,8 @@ export class Driver {
   @Column({ name: 'phone_number', unique: true })
   phoneNumber: string;
 
-  @Column({ default: true })
-  available: boolean;
+  @Column({ type: 'enum', enum: DriverStatus, default: DriverStatus.OFFLINE })
+  status: DriverStatus;
 
   @Column({ type: 'numeric', precision: 10, scale: 7, nullable: true })
   latitude?: number;

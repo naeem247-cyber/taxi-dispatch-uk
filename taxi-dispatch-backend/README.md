@@ -24,12 +24,18 @@ Backend scaffold for a **single-base UK private hire dispatch operation**.
 - Driver GPS update endpoint (`PATCH /api/v1/drivers/:id/location`) with strict ownership for driver role
 - Manual job creation endpoint (`POST /api/v1/jobs`)
 - Job assignment endpoint (`PATCH /api/v1/jobs/:id/assign`) with nearest-driver fallback (Haversine)
+- Race-safe assignment with DB transaction + pessimistic locking
+- Double-assignment prevention (conflict on already assigned job)
+- Driver availability state machine: `offline`, `available`, `reserved`, `on_trip`
 - Job lifecycle transition endpoint (`PATCH /api/v1/jobs/:id/status`)
 - Status lifecycle enforcement:
   - `requested -> accepted -> arrived -> on_trip -> completed`
 - Socket.io gateway namespace `/dispatch` that emits `job.updated`
+  - operator room: `operators`
+  - per-driver room: `driver:{driverId}`
 - Swagger docs at `/docs`
 - `/health` endpoint
+- Optional Redis scaffold for active driver location cache
 - Basic integration tests for auth and job lifecycle
 
 ## Project Structure

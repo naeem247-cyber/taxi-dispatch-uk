@@ -1,11 +1,18 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Job } from '../database/entities/job.entity';
 import { Driver } from '../database/entities/driver.entity';
 import { CreateJobDto } from './dto/create-job.dto';
 import { JobStatus } from '../common/enums/job-status.enum';
 import { JobsGateway } from './jobs.gateway';
+import { DriverStatus } from '../common/enums/driver-status.enum';
 
 const ALLOWED_TRANSITIONS: Record<JobStatus, JobStatus[]> = {
   [JobStatus.REQUESTED]: [JobStatus.ACCEPTED],
@@ -20,6 +27,7 @@ export class JobsService {
   constructor(
     @InjectRepository(Job) private readonly jobsRepo: Repository<Job>,
     @InjectRepository(Driver) private readonly driversRepo: Repository<Driver>,
+    private readonly dataSource: DataSource,
     private readonly jobsGateway: JobsGateway,
   ) {}
 
@@ -35,22 +43,35 @@ export class JobsService {
     });
 
     const saved = await this.jobsRepo.save(job);
-    this.jobsGateway.broadcastJobUpdate({ event: 'job.created', job: saved });
+    this.jobsGateway.broadcastJobCreated(saved);
     return saved;
   }
 
   async assign(jobId: string, driverId?: string) {
-    const job = await this.jobsRepo.findOne({ where: { id: jobId } });
-    if (!job) throw new NotFoundException('Job not found');
+    return this.dataSource.transaction(async (manager) => {
+      const jobRepo = manager.getRepository(Job);
+      const driverRepo = manager.getRepository(Driver);
 
-    const driver = driverId
-      ? await this.getAvailableDriver(driverId)
-      : await this.findNearestAvailableDriver(job);
+      const job = await jobRepo
+        .createQueryBuilder('job')
+        .setLock('pessimistic_write')
+        .where('job.id = :jobId', { jobId })
+        .getOne();
 
-    job.assignedDriverId = driver.id;
-    const saved = await this.jobsRepo.save(job);
-    this.jobsGateway.broadcastJobUpdate({ event: 'job.assigned', job: saved });
-    return saved;
+      if (!job) throw new NotFoundException('Job not found');
+      if (job.assignedDriverId) throw new ConflictException('Job already assigned');
+
+      const driver = driverId
+        ? await this.getSpecificAssignableDriver(driverRepo, driverId)
+        : await this.findNearestAssignableDriver(driverRepo, job);
+
+      job.assignedDriverId = driver.id;
+      driver.status = DriverStatus.RESERVED;
+
+      const [savedJob] = await Promise.all([jobRepo.save(job), driverRepo.save(driver)]);
+      this.jobsGateway.broadcastJobAssigned(savedJob, driver.id);
+      return savedJob;
+    });
   }
 
   async updateStatus(jobId: string, nextStatus: JobStatus, requester: { userId: string; role: string }) {
@@ -70,33 +91,55 @@ export class JobsService {
 
     job.status = nextStatus;
     const saved = await this.jobsRepo.save(job);
-    this.jobsGateway.broadcastJobUpdate({ event: 'job.status_changed', job: saved });
+
+    if (saved.assignedDriverId && (nextStatus === JobStatus.ON_TRIP || nextStatus === JobStatus.COMPLETED)) {
+      const driver = await this.driversRepo.findOne({ where: { id: saved.assignedDriverId } });
+      if (driver) {
+        driver.status = nextStatus === JobStatus.ON_TRIP ? DriverStatus.ON_TRIP : DriverStatus.AVAILABLE;
+        await this.driversRepo.save(driver);
+      }
+    }
+
+    this.jobsGateway.broadcastJobStatusChanged(saved);
     return saved;
   }
 
-  private async getAvailableDriver(driverId: string): Promise<Driver> {
-    const driver = await this.driversRepo.findOne({ where: { id: driverId } });
+  private async getSpecificAssignableDriver(driverRepo: Repository<Driver>, driverId: string): Promise<Driver> {
+    const driver = await driverRepo
+      .createQueryBuilder('driver')
+      .setLock('pessimistic_write')
+      .where('driver.id = :driverId', { driverId })
+      .getOne();
+
     if (!driver) throw new NotFoundException('Driver not found');
-    if (!driver.available) throw new BadRequestException('Driver is not available');
+    if (driver.status !== DriverStatus.AVAILABLE) {
+      throw new BadRequestException('Driver is not available for assignment');
+    }
     if (driver.latitude == null || driver.longitude == null) {
       throw new BadRequestException('Driver has no GPS coordinates');
     }
+
     return driver;
   }
 
-  private async findNearestAvailableDriver(job: Job): Promise<Driver> {
+  private async findNearestAssignableDriver(driverRepo: Repository<Driver>, job: Job): Promise<Driver> {
     if (job.pickupLatitude == null || job.pickupLongitude == null) {
       throw new BadRequestException('Job is missing pickup coordinates for nearest-driver assignment');
     }
 
-    const drivers = await this.driversRepo.find({ where: { available: true } });
-    const withCoords = drivers.filter((d) => d.latitude != null && d.longitude != null);
+    const candidates = await driverRepo
+      .createQueryBuilder('driver')
+      .setLock('pessimistic_write')
+      .where('driver.status = :status', { status: DriverStatus.AVAILABLE })
+      .andWhere('driver.latitude IS NOT NULL')
+      .andWhere('driver.longitude IS NOT NULL')
+      .getMany();
 
-    if (withCoords.length === 0) {
+    if (candidates.length === 0) {
       throw new BadRequestException('No available drivers with GPS coordinates found');
     }
 
-    let nearest = withCoords[0];
+    let nearest = candidates[0];
     let bestDistance = this.haversineKm(
       Number(job.pickupLatitude),
       Number(job.pickupLongitude),
@@ -104,14 +147,13 @@ export class JobsService {
       Number(nearest.longitude),
     );
 
-    for (const d of withCoords.slice(1)) {
+    for (const d of candidates.slice(1)) {
       const dist = this.haversineKm(
         Number(job.pickupLatitude),
         Number(job.pickupLongitude),
         Number(d.latitude),
         Number(d.longitude),
       );
-
       if (dist < bestDistance) {
         bestDistance = dist;
         nearest = d;

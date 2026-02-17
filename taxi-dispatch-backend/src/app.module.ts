@@ -13,6 +13,7 @@ import { CustomersModule } from './customers/customers.module';
 import { JobsModule } from './jobs/jobs.module';
 import { RecurringJobsModule } from './recurring-jobs/recurring-jobs.module';
 import { HealthModule } from './health/health.module';
+import { RedisModule } from './common/redis/redis.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { HealthModule } from './health/health.module';
         DB_NAME: Joi.string().required(),
         JWT_SECRET: Joi.string().min(16).required(),
         JWT_EXPIRES_IN: Joi.string().default('8h'),
+        REDIS_URL: Joi.string().uri().optional(),
       }),
     }),
     LoggerModule.forRoot({
@@ -72,6 +74,7 @@ import { HealthModule } from './health/health.module';
     JobsModule,
     RecurringJobsModule,
     HealthModule,
+    RedisModule,
   ],
   providers: [
     {

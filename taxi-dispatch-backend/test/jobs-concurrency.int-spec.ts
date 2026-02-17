@@ -1,21 +1,30 @@
+import { ConflictException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { JobsService } from '../src/jobs/jobs.service';
 import { Job } from '../src/database/entities/job.entity';
 import { Driver } from '../src/database/entities/driver.entity';
-import { JobStatus } from '../src/common/enums/job-status.enum';
-import { JobsGateway } from '../src/jobs/jobs.gateway';
 import { DriverStatus } from '../src/common/enums/driver-status.enum';
+import { JobsGateway } from '../src/jobs/jobs.gateway';
 
-describe('Jobs lifecycle integration', () => {
+describe('Jobs assignment concurrency', () => {
   let jobsService: JobsService;
 
-  const jobs: any[] = [];
+  const jobs: any[] = [
+    {
+      id: 'job-1',
+      customerId: 'customer-1',
+      pickupLatitude: 51.5074,
+      pickupLongitude: -0.1278,
+      assignedDriverId: null,
+      status: 'requested',
+    },
+  ];
+
   const drivers: any[] = [
     {
       id: 'driver-1',
-      accountId: 'driver-account-1',
       status: DriverStatus.AVAILABLE,
       latitude: 51.5007,
       longitude: -0.1246,
@@ -23,32 +32,21 @@ describe('Jobs lifecycle integration', () => {
   ];
 
   const jobsRepoMock = {
-    create: (data: any) => ({ id: `job-${jobs.length + 1}`, ...data }),
+    create: jest.fn(),
     save: async (job: any) => {
-      const index = jobs.findIndex((j) => j.id === job.id);
-      if (index === -1) jobs.push(job);
-      else jobs[index] = { ...jobs[index], ...job };
-      return job;
+      const idx = jobs.findIndex((j) => j.id === job.id);
+      jobs[idx] = { ...jobs[idx], ...job };
+      return jobs[idx];
     },
-    findOne: async ({ where }: any) => {
-      const found = jobs.find((j) => j.id === where.id);
-      if (!found) return null;
-      if (found.assignedDriverId) {
-        return {
-          ...found,
-          assignedDriver: drivers.find((d) => d.id === found.assignedDriverId),
-        };
-      }
-      return found;
-    },
+    findOne: async ({ where }: any) => jobs.find((j) => j.id === where.id) ?? null,
   };
 
   const driversRepoMock = {
     findOne: async ({ where }: any) => drivers.find((d) => d.id === where.id) ?? null,
     save: async (driver: any) => {
       const idx = drivers.findIndex((d) => d.id === driver.id);
-      if (idx >= 0) drivers[idx] = { ...drivers[idx], ...driver };
-      return driver;
+      drivers[idx] = { ...drivers[idx], ...driver };
+      return drivers[idx];
     },
   };
 
@@ -84,15 +82,20 @@ describe('Jobs lifecycle integration', () => {
     save: driversRepoMock.save,
   };
 
+  let txQueue = Promise.resolve();
   const dataSourceMock = {
-    transaction: async (work: (manager: any) => Promise<any>) =>
-      work({
-        getRepository: (entity: any) => {
-          if (entity === Job) return txJobsRepo;
-          if (entity === Driver) return txDriversRepo;
-          return null;
-        },
-      }),
+    transaction: async (work: (manager: any) => Promise<any>) => {
+      const run = async () =>
+        work({
+          getRepository: (entity: any) => {
+            if (entity === Job) return txJobsRepo;
+            if (entity === Driver) return txDriversRepo;
+            return null;
+          },
+        });
+      txQueue = txQueue.then(run, run);
+      return txQueue;
+    },
   };
 
   const jobsGatewayMock = {
@@ -115,35 +118,16 @@ describe('Jobs lifecycle integration', () => {
     jobsService = moduleRef.get(JobsService);
   });
 
-  it('creates, assigns and transitions lifecycle in order', async () => {
-    const created = await jobsService.create({
-      customerId: 'customer-1',
-      pickupAddress: 'A',
-      dropoffAddress: 'B',
-      pickupLatitude: 51.5074,
-      pickupLongitude: -0.1278,
-    });
+  it('allows only one assignment under concurrent attempts', async () => {
+    const [r1, r2] = await Promise.allSettled([jobsService.assign('job-1'), jobsService.assign('job-1')]);
 
-    const assigned = await jobsService.assign(created.id);
-    expect(assigned.assignedDriverId).toBe('driver-1');
+    const fulfilled = [r1, r2].filter((r) => r.status === 'fulfilled');
+    const rejected = [r1, r2].filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
 
-    const accepted = await jobsService.updateStatus(assigned.id, JobStatus.ACCEPTED, {
-      userId: 'driver-account-1',
-      role: 'driver',
-    });
-    const arrived = await jobsService.updateStatus(accepted.id, JobStatus.ARRIVED, {
-      userId: 'driver-account-1',
-      role: 'driver',
-    });
-    const onTrip = await jobsService.updateStatus(arrived.id, JobStatus.ON_TRIP, {
-      userId: 'driver-account-1',
-      role: 'driver',
-    });
-    const completed = await jobsService.updateStatus(onTrip.id, JobStatus.COMPLETED, {
-      userId: 'driver-account-1',
-      role: 'driver',
-    });
-
-    expect(completed.status).toBe(JobStatus.COMPLETED);
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0].reason).toBeInstanceOf(ConflictException);
+    expect(jobs[0].assignedDriverId).toBe('driver-1');
+    expect(drivers[0].status).toBe(DriverStatus.RESERVED);
   });
 });

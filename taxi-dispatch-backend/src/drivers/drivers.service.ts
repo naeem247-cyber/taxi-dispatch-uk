@@ -3,12 +3,14 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Driver } from '../database/entities/driver.entity';
 import { UpdateLocationDto } from './dto/update-location.dto';
+import { RedisService } from '../common/redis/redis.service';
 
 @Injectable()
 export class DriversService {
   constructor(
     @InjectRepository(Driver)
     private readonly driversRepo: Repository<Driver>,
+    private readonly redisService: RedisService,
   ) {}
 
   async updateLocation(
@@ -27,6 +29,8 @@ export class DriversService {
     driver.longitude = dto.longitude;
     driver.lastGpsAt = new Date();
 
-    return this.driversRepo.save(driver);
+    const saved = await this.driversRepo.save(driver);
+    await this.redisService.setDriverLocation(saved.id, dto.latitude, dto.longitude);
+    return saved;
   }
 }
