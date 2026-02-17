@@ -1,0 +1,42 @@
+import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import { JobStatus } from '../../common/enums/job-status.enum';
+import { Customer } from './customer.entity';
+import { Driver } from './driver.entity';
+
+@Entity('jobs')
+export class Job {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column({ name: 'customer_id' })
+  customerId: string;
+
+  @Column({ name: 'pickup_address' })
+  pickupAddress: string;
+
+  @Column({ name: 'dropoff_address' })
+  dropoffAddress: string;
+
+  @Column({ name: 'scheduled_for', type: 'timestamptz', nullable: true })
+  scheduledFor?: Date;
+
+  @Column({ type: 'enum', enum: JobStatus, default: JobStatus.REQUESTED })
+  status: JobStatus;
+
+  @Column({ name: 'assigned_driver_id', nullable: true })
+  assignedDriverId?: string;
+
+  @ManyToOne(() => Customer)
+  @JoinColumn({ name: 'customer_id' })
+  customer: Customer;
+
+  @ManyToOne(() => Driver, { nullable: true })
+  @JoinColumn({ name: 'assigned_driver_id' })
+  assignedDriver?: Driver;
+
+  @CreateDateColumn({ name: 'created_at' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updated_at' })
+  updatedAt: Date;
+}

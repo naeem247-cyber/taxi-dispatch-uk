@@ -1,0 +1,29 @@
+version: '3.9'
+services:
+  api:
+    build: .
+    container_name: taxi_dispatch_api
+    depends_on:
+      - postgres
+    env_file:
+      - .env
+    ports:
+      - '3000:3000'
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: taxi_dispatch_postgres
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+    restart: unless-stopped
+
+volumes:
+  pgdata:
