@@ -17,6 +17,12 @@ export class Job {
   @Column({ name: 'dropoff_address' })
   dropoffAddress: string;
 
+  @Column({ name: 'pickup_latitude', type: 'numeric', precision: 10, scale: 7, nullable: true })
+  pickupLatitude?: number;
+
+  @Column({ name: 'pickup_longitude', type: 'numeric', precision: 10, scale: 7, nullable: true })
+  pickupLongitude?: number;
+
   @Column({ name: 'scheduled_for', type: 'timestamptz', nullable: true })
   scheduledFor?: Date;
 

@@ -11,6 +11,7 @@ Backend scaffold for a **single-base UK private hire dispatch operation**.
 
 ## Implemented in this scaffold
 - Clean module-based NestJS structure
+- TypeORM migration-based schema (no raw init SQL)
 - Core database entities/tables:
   - `accounts`
   - `drivers`
@@ -20,13 +21,15 @@ Backend scaffold for a **single-base UK private hire dispatch operation**.
   - `recurring_jobs`
 - JWT login endpoint (`POST /api/v1/auth/login`)
 - Role model (`admin`, `operator`, `driver`)
-- Driver GPS update endpoint (`PATCH /api/v1/drivers/:id/location`)
+- Driver GPS update endpoint (`PATCH /api/v1/drivers/:id/location`) with strict ownership for driver role
 - Manual job creation endpoint (`POST /api/v1/jobs`)
-- Job assignment endpoint (`PATCH /api/v1/jobs/:id/assign`)
+- Job assignment endpoint (`PATCH /api/v1/jobs/:id/assign`) with nearest-driver fallback (Haversine)
 - Job lifecycle transition endpoint (`PATCH /api/v1/jobs/:id/status`)
 - Status lifecycle enforcement:
   - `requested -> accepted -> arrived -> on_trip -> completed`
 - Socket.io gateway namespace `/dispatch` that emits `job.updated`
+- Swagger docs at `/docs`
+- Basic integration tests for auth and job lifecycle
 
 ## Project Structure
 
@@ -54,8 +57,8 @@ src/
   recurring-jobs/
   database/entities/
 
-database/
-  schema.sql
+migrations/
+  (TypeORM migration files live under src/migrations)
 ```
 
 ## Environment
@@ -76,11 +79,21 @@ docker compose up --build
 API base URL:
 - `http://localhost:3000/api/v1`
 
+Swagger:
+- `http://localhost:3000/docs`
+
 ## Local Run (without Docker)
 
 ```bash
 npm install
+npm run migration:run
 npm run start:dev
+```
+
+Run integration tests:
+
+```bash
+npm run test:integration
 ```
 
 ## Notes for Production Hardening (next steps)
@@ -88,7 +101,7 @@ npm run start:dev
 - Add account registration + password hashing policy
 - Add migrations for schema evolution
 - Add audit logs for job and assignment actions
-- Restrict driver status updates to assigned jobs only
+- Add richer policy engine for complex operator/driver business rules
 - Add operator queue / nearest-driver assignment strategy
 - Add Redis adapter for multi-instance Socket.io scale
 - Add rate limiting, request logging, and observability

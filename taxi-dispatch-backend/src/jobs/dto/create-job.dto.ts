@@ -1,4 +1,4 @@
-import { IsDateString, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsDateString, IsLatitude, IsLongitude, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CreateJobDto {
   @IsUUID()
@@ -9,6 +9,14 @@ export class CreateJobDto {
 
   @IsString()
   dropoffAddress: string;
+
+  @IsOptional()
+  @IsLatitude()
+  pickupLatitude?: number;
+
+  @IsOptional()
+  @IsLongitude()
+  pickupLongitude?: number;
 
   @IsOptional()
   @IsDateString()

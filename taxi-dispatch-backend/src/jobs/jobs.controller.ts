@@ -1,4 +1,5 @@
-import { Body, Controller, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JobsService } from './jobs.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -8,6 +9,8 @@ import { CreateJobDto } from './dto/create-job.dto';
 import { AssignJobDto } from './dto/assign-job.dto';
 import { UpdateJobStatusDto } from './dto/update-job-status.dto';
 
+@ApiTags('Jobs')
+@ApiBearerAuth()
 @Controller('jobs')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class JobsController {
@@ -27,7 +30,11 @@ export class JobsController {
 
   @Patch(':id/status')
   @Roles(Role.ADMIN, Role.OPERATOR, Role.DRIVER)
-  updateStatus(@Param('id') id: string, @Body() dto: UpdateJobStatusDto) {
-    return this.jobsService.updateStatus(id, dto.status);
+  updateStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateJobStatusDto,
+    @Req() req: { user: { userId: string; role: Role } },
+  ) {
+    return this.jobsService.updateStatus(id, dto.status, req.user);
   }
 }
