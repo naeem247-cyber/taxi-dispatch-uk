@@ -4,9 +4,10 @@ import { Driver } from '../database/entities/driver.entity';
 import { DriversController } from './drivers.controller';
 import { DriversService } from './drivers.service';
 import { RedisModule } from '../common/redis/redis.module';
+import { Vehicle } from '../database/entities/vehicle.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Driver]), RedisModule],
+  imports: [TypeOrmModule.forFeature([Driver, Vehicle]), RedisModule],
   controllers: [DriversController],
   providers: [DriversService],
   exports: [DriversService],

@@ -13,6 +13,12 @@ export class DriversService {
     private readonly redisService: RedisService,
   ) {}
 
+  async findAll() {
+  return this.driversRepo.find({
+    order: { createdAt: 'DESC' },
+  });
+}
+
   async updateLocation(
     driverId: string,
     dto: UpdateLocationDto,

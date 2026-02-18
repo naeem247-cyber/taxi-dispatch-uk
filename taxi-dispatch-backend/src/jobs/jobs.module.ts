@@ -5,9 +5,10 @@ import { Driver } from '../database/entities/driver.entity';
 import { JobsService } from './jobs.service';
 import { JobsController } from './jobs.controller';
 import { JobsGateway } from './jobs.gateway';
+import { Vehicle } from '../database/entities/vehicle.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Job, Driver])],
+  imports: [TypeOrmModule.forFeature([Job, Driver, Vehicle])],
   controllers: [JobsController],
   providers: [JobsService, JobsGateway],
 })

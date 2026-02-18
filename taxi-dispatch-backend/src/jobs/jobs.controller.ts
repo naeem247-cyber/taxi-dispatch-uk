@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Param, Body, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JobsService } from './jobs.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -15,6 +15,12 @@ import { UpdateJobStatusDto } from './dto/update-job-status.dto';
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class JobsController {
   constructor(private readonly jobsService: JobsService) {}
+
+  @Get()
+  @Roles(Role.ADMIN, Role.OPERATOR)
+  findAll() {
+    return this.jobsService.findAll();
+  }
 
   @Post()
   @Roles(Role.ADMIN, Role.OPERATOR)
@@ -33,7 +39,7 @@ export class JobsController {
   updateStatus(
     @Param('id') id: string,
     @Body() dto: UpdateJobStatusDto,
-    @Req() req: { user: { userId: string; role: Role } },
+    @Req() req: { user: { userId: string; role: string } },
   ) {
     return this.jobsService.updateStatus(id, dto.status, req.user);
   }

@@ -36,7 +36,7 @@ export class Driver {
   @JoinColumn({ name: 'account_id' })
   account: Account;
 
-  @ManyToOne(() => Vehicle, (vehicle) => vehicle.drivers, { nullable: true })
+  @ManyToOne(() => Vehicle, { nullable: true })
   @JoinColumn({ name: 'vehicle_id' })
   vehicle?: Vehicle;
 

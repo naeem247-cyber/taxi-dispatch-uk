@@ -1,4 +1,12 @@
-import { Body, Controller, Param, Patch, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { DriversService } from './drivers.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -14,9 +22,20 @@ import { UpdateLocationDto } from './dto/update-location.dto';
 export class DriversController {
   constructor(private readonly driversService: DriversService) {}
 
+  // ✅ Required for frontend: GET /api/v1/drivers
+  @Get()
+  @Roles(Role.ADMIN, Role.OPERATOR)
+  findAll() {
+    return this.driversService.findAll();
+  }
+
   @Patch(':id/location')
   @Roles(Role.DRIVER, Role.OPERATOR, Role.ADMIN)
-  updateLocation(@Param('id') id: string, @Body() dto: UpdateLocationDto, @Req() req: { user: { userId: string; role: Role } }) {
+  updateLocation(
+    @Param('id') id: string,
+    @Body() dto: UpdateLocationDto,
+    @Req() req: { user: { userId: string; role: Role } },
+  ) {
     return this.driversService.updateLocation(id, dto, req.user);
   }
 }
